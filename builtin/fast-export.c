@@ -275,7 +275,7 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 	struct strbuf extras = STRBUF_INIT;
 	char *reencoded = NULL;
 	struct commit_list *p;
-	int i, extracount = 0;
+	int i;
 
 	rev->diffopt.output_format = DIFF_FORMAT_CALLBACK;
 
@@ -296,8 +296,7 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 	encoding = find_encoding(committer_end, message);
 	extra = committer_end + 1;
 	while (extra < message) {
-		extracount++;
-		next = strchrnul(extra + 1, '\n');
+		next = strchrnul(extra, '\n');
 		if (prefixcmp(extra, "encoding ")) {
 			strbuf_addstr(&extras, "extra ");
 			strbuf_add(&extras, extra, next - extra);
@@ -329,16 +328,17 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 		reencoded = reencode_string(message, "UTF-8", encoding);
 	if (!commit->parents)
 		printf("reset %s\n", (const char*)commit->util);
-	printf("commit %s\nmark :%"PRIu32"\n%.*s\n%.*s\ndata %u\n%s",
+	printf("commit %s\nmark :%"PRIu32"\n%.*s\n%.*s\n%sdata %u\n%s",
 	       (const char *)commit->util, last_idnum,
 	       (int)(author_end - author), author,
 	       (int)(committer_end - committer), committer,
+	       extras.buf,
 	       (unsigned)(reencoded
 			  ? strlen(reencoded) : message
 			  ? strlen(message) : 0),
 	       reencoded ? reencoded : message ? message : "");
 	free(reencoded);
-	strbuf_release(extra);
+	strbuf_release(&extras);
 
 	for (i = 0, p = commit->parents; p; p = p->next) {
 		int mark = get_object_mark(&p->item->object);
