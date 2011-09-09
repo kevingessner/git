@@ -371,6 +371,7 @@ change to the project.
 	mark?
 	('author' (SP <name>)? SP LT <email> GT SP <when> LF)?
 	'committer' (SP <name>)? SP LT <email> GT SP <when> LF
+	('extra' SP <key> SP <value> LF)*
 	data
 	('from' SP <committish> LF)?
 	('merge' SP <committish> LF)?
@@ -432,6 +433,15 @@ The time of the change is specified by `<when>` using the date format
 that was selected by the \--date-format=<fmt> command line option.
 See ``Date Formats'' above for the set of supported formats, and
 their syntax.
+
+`extra`
+^^^^^^^
+The `extra` command adds additional metadata to the commit. The data is
+stored as key-value pairs in the commit header, and thus (unlike notes)
+affects the commit's hash.
+
+`<key>` and `<value>` must be valid UTF-8 strings. Neither can contain `lf`;
+`<key>` can also not contain `sp`.
 
 `from`
 ^^^^^^
@@ -1041,6 +1051,12 @@ done::
 	Without this feature, errors causing the frontend to end
 	abruptly at a convenient point in the stream can go
 	undetected.
+
+commit-extra::
+	Allow the stream to include additional metadata with commits,
+	specified with the 'extra' subcommand to the 'commit' command.
+	Useful, for instance, to include pertinent foreign data when
+	converting a commit from a foreign VCS.
 
 `option`
 ~~~~~~~~

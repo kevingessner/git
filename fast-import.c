@@ -24,6 +24,7 @@ Format of STDIN stream:
     commit_msg
     ('from' sp committish lf)?
     ('merge' sp committish lf)*
+    ('extra' sp key sp value lf)*
     (file_change | ls)*
     lf?;
   commit_msg ::= data;
@@ -133,6 +134,8 @@ Format of STDIN stream:
   email ::= # valid GIT author/committer email;
   ts    ::= # time since the epoch in seconds, ascii base10 notation;
   tz    ::= # GIT style timezone;
+  key   ::= # UTF-8 string not containing sp or lf
+  value ::= # UTF-8 string not containing lf
 
      # note: comments, ls and cat requests may appear anywhere
      # in the input, except within a data command.  Any form
@@ -274,6 +277,12 @@ struct recent_command {
 	struct recent_command *prev;
 	struct recent_command *next;
 	char *buf;
+};
+
+struct key_value_list {
+    struct key_value_list *next;
+    char *key;
+    char *value;
 };
 
 /* Configured limits on output */
@@ -2587,6 +2596,35 @@ static struct hash_list *parse_merge(unsigned int *count)
 	return list;
 }
 
+static struct key_value_list *parse_commit_extra()
+{
+	struct key_value_list *list = NULL, *n, *e = e;
+	const char *key, *value;
+	size_t keylen;
+
+	while (!prefixcmp(command_buf.buf, "extra ")) {
+		key = strchr(command_buf.buf, ' ') + 1;
+		value = strchr(key, ' ') + 1;
+		keylen = value - key - 1;
+
+		n = xmalloc(sizeof(*n));
+		n->key = xmalloc(sizeof(char) * (keylen + 1));
+		memcpy(n->key, key, keylen);
+		n->key[keylen] = '\0';
+		n->value = xmalloc(sizeof(char) * (strlen(value) + 1));
+		strcpy(n->value, value);
+		n->next = NULL;
+
+		if (list)
+			e->next = n;
+		else
+			list = n;
+		e = n;
+		read_next_command();
+	}
+	return list;
+}
+
 static void parse_new_commit(void)
 {
 	static struct strbuf msg = STRBUF_INIT;
@@ -2596,6 +2634,7 @@ static void parse_new_commit(void)
 	char *committer = NULL;
 	struct hash_list *merge_list = NULL;
 	unsigned int merge_count;
+	struct key_value_list *extra_list = NULL;
 	unsigned char prev_fanout, new_fanout;
 
 	/* Obtain the branch name from the rest of our command */
@@ -2616,6 +2655,7 @@ static void parse_new_commit(void)
 	}
 	if (!committer)
 		die("Expected committer but didn't get one");
+	extra_list = parse_commit_extra();
 	parse_data(&msg, 0, NULL);
 	read_next_command();
 	parse_from(b);
@@ -2675,9 +2715,19 @@ static void parse_new_commit(void)
 	}
 	strbuf_addf(&new_data,
 		"author %s\n"
-		"committer %s\n"
-		"\n",
+		"committer %s\n",
 		author ? author : committer, committer);
+	while (extra_list) {
+		struct key_value_list *next = extra_list->next;
+		strbuf_addf(&new_data,
+			"%s %s\n",
+			extra_list->key, extra_list->value);
+		free(extra_list->key);
+		free(extra_list->value);
+		free(extra_list);
+		extra_list = next;
+	}
+	strbuf_addstr(&new_data, "\n");
 	strbuf_addbuf(&new_data, &msg);
 	free(author);
 	free(committer);
@@ -3186,7 +3236,8 @@ static int parse_one_feature(const char *feature, int from_stream)
 		require_explicit_termination = 1;
 	} else if (!strcmp(feature, "force")) {
 		force_update = 1;
-	} else if (!strcmp(feature, "notes") || !strcmp(feature, "ls")) {
+	} else if (!strcmp(feature, "notes") || !strcmp(feature, "ls") ||
+			!strcmp(feature, "commit-extra")) {
 		; /* do nothing; we have the feature */
 	} else {
 		return 0;
