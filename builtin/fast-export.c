@@ -271,10 +271,11 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 {
 	int saved_output_format = rev->diffopt.output_format;
 	const char *author, *author_end, *committer, *committer_end;
-	const char *encoding, *message;
+	const char *encoding, *message, *extra, *next;
+	struct strbuf extras = STRBUF_INIT;
 	char *reencoded = NULL;
 	struct commit_list *p;
-	int i;
+	int i, extracount = 0;
 
 	rev->diffopt.output_format = DIFF_FORMAT_CALLBACK;
 
@@ -293,6 +294,15 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 	committer_end = strchrnul(committer, '\n');
 	message = strstr(committer_end, "\n\n");
 	encoding = find_encoding(committer_end, message);
+	extra = committer_end + 1;
+	while (extra < message) {
+		extracount++;
+		next = strchrnul(extra + 1, '\n');
+		if (prefixcmp(extra, "encoding "))
+			strbuf_add(&extras, extra, next - extra);
+		extra = next + 1;
+	}
+	printf("%d extras, (%s)\n", extracount, extras.buf);
 	if (message)
 		message += 2;
 
@@ -326,6 +336,7 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 			  ? strlen(message) : 0),
 	       reencoded ? reencoded : message ? message : "");
 	free(reencoded);
+	strbuf_release(extra);
 
 	for (i = 0, p = commit->parents; p; p = p->next) {
 		int mark = get_object_mark(&p->item->object);
