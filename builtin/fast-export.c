@@ -298,11 +298,13 @@ static void handle_commit(struct commit *commit, struct rev_info *rev)
 	while (extra < message) {
 		extracount++;
 		next = strchrnul(extra + 1, '\n');
-		if (prefixcmp(extra, "encoding "))
+		if (prefixcmp(extra, "encoding ")) {
+			strbuf_addstr(&extras, "extra ");
 			strbuf_add(&extras, extra, next - extra);
+			strbuf_addstr(&extras, "\n");
+		}
 		extra = next + 1;
 	}
-	printf("%d extras, (%s)\n", extracount, extras.buf);
 	if (message)
 		message += 2;
 
